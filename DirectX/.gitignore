@@ -1,0 +1,41 @@
+# Build outputs
+Debug/
+Release/
+x64/
+x86/
+bin/
+obj/
+ipch/
+
+# Compiled artifacts
+*.obj
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.aps
+
+# Visual Studio IDE files
+.vs/
+*.vcxproj.filters
+*.user
+*.suo
+*.ncb
+*.opensdf
+*.sdf
+*.cachefile
+*.VC.db
+*.VC.opendb
+*.VC.VC.opendb
+
+# Shader compiled output
+*.cso
+*.fxo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
