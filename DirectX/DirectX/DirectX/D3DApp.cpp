@@ -296,15 +296,16 @@ void D3DApp::Update(float dt)
     mCtx->Map(mCBuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     auto* cb = reinterpret_cast<cbPerObject*>(mapped.pData);
 
-    XMVECTOR ld = XMVector3Normalize(XMVectorSet(1.0f, sinf(mLightAngle), -1.0f, 0.0f));
-    XMStoreFloat3(&cb->lightDir, ld);
-
     cb->world       = XMMatrixTranspose(XMMatrixRotationY(mRotation));
     cb->view        = XMMatrixTranspose(mCamera.GetView());
     cb->proj        = XMMatrixTranspose(mCamera.GetProj((float)mWidth / mHeight));
     cb->cameraPos   = mCamera.position;
     cb->heightScale = mHeightScale;
+    cb->specPower   = mSpecPower;
     cb->usePOM      = mUsePOM ? 1 : 0;
+
+    XMVECTOR ld = XMVector3Normalize(XMVectorSet(1.0f, sinf(mLightAngle), -1.0f, 0.0f));
+    XMStoreFloat3(&cb->lightDir, ld);
 
     mCtx->Unmap(mCBuf.Get(), 0);
 }
@@ -342,6 +343,8 @@ void D3DApp::Render()
     ImGui::Checkbox("Enable POM", &mUsePOM);
     ImGui::SliderFloat("Height Scale", &mHeightScale, 0.01f, 0.2f);
     ImGui::SliderFloat("Rotation Speed", &mRotSpeed, 0.0f, 5.0f);
+    ImGui::Separator();
+    ImGui::SliderFloat("Specular Power", &mSpecPower, 1.0f, 256.0f);
     ImGui::Separator();
     if (mLightPaused) {
         if (ImGui::Button("Resume Light")) mLightPaused = false;

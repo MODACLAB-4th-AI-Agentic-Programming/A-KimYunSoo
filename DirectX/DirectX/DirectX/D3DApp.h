@@ -17,16 +17,18 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-// 16-byte aligned: 64+64+64+16+16 = 224 bytes
+// 16-byte aligned: 64+64+64+16+16+16 = 240 bytes
 struct cbPerObject
 {
     XMMATRIX world;
     XMMATRIX view;
     XMMATRIX proj;
-    XMFLOAT3 cameraPos;
+    XMFLOAT3 cameraPos;   // block [192-207]
     float    heightScale;
-    int      usePOM;
-    XMFLOAT3 lightDir;
+    XMFLOAT3 lightDir;    // block [208-223]
+    float    specPower;
+    int      usePOM;      // block [224-239]
+    int      pad[3];
 };
 
 class D3DApp
@@ -85,6 +87,7 @@ private:
 
     bool  mUsePOM      = true;
     float mHeightScale = 0.05f;
+    float mSpecPower   = 32.0f;
     float mRotation    = 0.0f;
     float mRotSpeed    = 1.0f;
     float mLightAngle  = 0.0f;

@@ -5,8 +5,10 @@ cbuffer cbPerObject : register(b0)
     float4x4 gProj;
     float3   gCameraPos;
     float    gHeightScale;
-    int      gUsePOM;
     float3   gLightDir;
+    float    gSpecPower;
+    int      gUsePOM;
+    int      pad[3];
 };
 
 Texture2D    gDiffuseTex : register(t0);
@@ -69,9 +71,18 @@ float4 PS(PSInput input) : SV_TARGET
     // 탄젠트 -> 월드 공간 변환: mul(v, TBN) = T*v.x + B*v.y + N*v.z
     float3 normalWS = normalize(mul(normalTS, TBN));
 
-    // Lambert + ambient
-    float  NdotL    = saturate(dot(normalWS, normalize(gLightDir)));
-    float3 lit      = diffuse.rgb * (NdotL * 0.85 + 0.15);
+    float3 L = normalize(gLightDir);
+
+    // Lambert
+    float NdotL = saturate(dot(normalWS, L));
+
+    // Blinn-Phong specular
+    float3 H    = normalize(viewDirWS + L);
+    float NdotH = saturate(dot(normalWS, H));
+    float spec  = pow(NdotH, gSpecPower);
+
+    float3 lit = diffuse.rgb * (NdotL * 0.85 + 0.15)
+               + float3(1.0, 1.0, 1.0) * spec * 0.6 * NdotL;
 
     return float4(lit, diffuse.a);
 }
