@@ -5,6 +5,8 @@ cbuffer cbPerObject : register(b0)
     float4x4 gProj;
     float3   gCameraPos;
     float    gHeightScale;
+    int      gUsePOM;
+    float3   gPad;
 };
 
 Texture2D    gDiffuseTex : register(t0);
@@ -21,9 +23,6 @@ struct PSInput
     float3 posWS       : TEXCOORD4;
 };
 
-// Ray marching POM
-// viewDirTS: view direction in tangent space (z > 0 points toward surface)
-// Returns offset UV coordinates
 float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS)
 {
     float numLayers  = lerp(32.0, 8.0, saturate(abs(viewDirTS.z)));
@@ -49,19 +48,15 @@ float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS)
 float4 PS(PSInput input) : SV_TARGET
 {
     float3 viewDirWS = normalize(gCameraPos - input.posWS);
-
-    // TBN rows are T, B, N -> mul(TBN, v) transforms world to tangent space
     float3x3 TBN     = float3x3(input.tangentWS, input.bitangentWS, input.normalWS);
     float3 viewDirTS = normalize(mul(TBN, viewDirWS));
 
-    // Skip POM at grazing angles to avoid artifacts
     float2 finalUV = input.uv;
-    if (viewDirTS.z > 0.001)
+    if (gUsePOM && viewDirTS.z > 0.001)
         finalUV = ParallaxOcclusionMapping(input.uv, viewDirTS);
 
     float4 diffuse = gDiffuseTex.Sample(gSampler, finalUV);
 
-    // Lambert diffuse + ambient
     float3 lightDir = normalize(float3(1.0, 1.0, -1.0));
     float  NdotL    = saturate(dot(normalize(input.normalWS), lightDir));
     float3 lit      = diffuse.rgb * (NdotL * 0.8 + 0.2);

@@ -131,11 +131,20 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="D3DApp.cpp" />
     <ClCompile Include="Sphere.cpp" />
+    <ClCompile Include="..\ImGui\imgui.cpp" />
+    <ClCompile Include="..\ImGui\imgui_draw.cpp" />
+    <ClCompile Include="..\ImGui\imgui_tables.cpp" />
+    <ClCompile Include="..\ImGui\imgui_widgets.cpp" />
+    <ClCompile Include="..\ImGui\imgui_impl_win32.cpp" />
+    <ClCompile Include="..\ImGui\imgui_impl_dx11.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D3DApp.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Sphere.h" />
+    <ClInclude Include="..\ImGui\imgui.h" />
+    <ClInclude Include="..\ImGui\imgui_impl_win32.h" />
+    <ClInclude Include="..\ImGui\imgui_impl_dx11.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Shader\POM_VS.hlsl" />

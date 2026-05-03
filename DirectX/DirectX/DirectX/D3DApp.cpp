@@ -1,11 +1,18 @@
 #include "D3DApp.h"
 #include <wincodec.h>
 #include <cassert>
+#include "../ImGui/imgui.h"
+#include "../ImGui/imgui_impl_win32.h"
+#include "../ImGui/imgui_impl_dx11.h"
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
 static D3DApp* gApp = nullptr;
 
 LRESULT CALLBACK D3DApp::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
+        return true;
     if (gApp) return gApp->MsgProc(hwnd, msg, wParam, lParam);
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
@@ -17,6 +24,10 @@ D3DApp::D3DApp(HINSTANCE hInst) : mhInst(hInst), mhWnd(nullptr)
 
 D3DApp::~D3DApp()
 {
+    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+
     if (mSampler)    mSampler->Release();
     if (mHeightSRV)  mHeightSRV->Release();
     if (mDiffuseSRV) mDiffuseSRV->Release();
@@ -40,6 +51,7 @@ bool D3DApp::Init()
     CoInitialize(nullptr);
     if (!InitWindow()) return false;
     if (!InitD3D())    return false;
+    InitImGui();
     mSphere.Build(mDevice);
     BuildShaders();
     BuildRenderState();
@@ -119,6 +131,15 @@ bool D3DApp::InitD3D()
 
     OnResize();
     return true;
+}
+
+void D3DApp::InitImGui()
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplWin32_Init(mhWnd);
+    ImGui_ImplDX11_Init(mDevice, mCtx);
 }
 
 void D3DApp::OnResize()
@@ -237,7 +258,6 @@ void D3DApp::BuildConstantBuffer()
     mDevice->CreateBuffer(&cbd, nullptr, &mCBuf);
 }
 
-// Load PNG/JPG via WIC (Windows SDK built-in, no NuGet needed)
 HRESULT D3DApp::LoadTexture(const wchar_t* path, ID3D11ShaderResourceView** ppSRV)
 {
     *ppSRV = nullptr;
@@ -295,8 +315,8 @@ HRESULT D3DApp::LoadTexture(const wchar_t* path, ID3D11ShaderResourceView** ppSR
 
 void D3DApp::LoadTextures()
 {
-    LoadTexture(L"Texture/diffuse.png",   &mDiffuseSRV);
-    LoadTexture(L"Texture/heightmap.png", &mHeightSRV);
+    LoadTexture(L"../Texture/diffuse.png",      &mDiffuseSRV);
+    LoadTexture(L"../Texture/displacement.png", &mHeightSRV);
 }
 
 void D3DApp::Update(float /*dt*/)
@@ -309,7 +329,9 @@ void D3DApp::Update(float /*dt*/)
     cb->view        = XMMatrixTranspose(mCamera.GetView());
     cb->proj        = XMMatrixTranspose(mCamera.GetProj((float)mWidth / mHeight));
     cb->cameraPos   = mCamera.position;
-    cb->heightScale = 0.05f;
+    cb->heightScale = mHeightScale;
+    cb->usePOM      = mUsePOM ? 1 : 0;
+    cb->pad[0] = cb->pad[1] = cb->pad[2] = 0.0f;
 
     mCtx->Unmap(mCBuf, 0);
 }
@@ -334,6 +356,19 @@ void D3DApp::Render()
     mCtx->PSSetSamplers(0, 1, &mSampler);
 
     mSphere.Draw(mCtx);
+
+    // ImGui
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::Begin("POM Controls");
+    ImGui::Checkbox("Enable POM", &mUsePOM);
+    ImGui::SliderFloat("Height Scale", &mHeightScale, 0.01f, 0.2f);
+    ImGui::End();
+
+    ImGui::Render();
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
     mSwapChain->Present(1, 0);
 }

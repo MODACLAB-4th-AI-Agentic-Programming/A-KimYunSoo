@@ -35,6 +35,9 @@ ipch/
 *.cso
 *.fxo
 
+# ImGui runtime
+imgui.ini
+
 # OS
 Thumbs.db
 Desktop.ini

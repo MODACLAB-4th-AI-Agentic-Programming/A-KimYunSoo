@@ -15,7 +15,7 @@
 
 using namespace DirectX;
 
-// 16-byte aligned: 64+64+64+12+4 = 208 bytes
+// 16-byte aligned: 64+64+64+16+16 = 224 bytes
 struct cbPerObject
 {
     XMMATRIX world;
@@ -23,6 +23,8 @@ struct cbPerObject
     XMMATRIX proj;
     XMFLOAT3 cameraPos;
     float    heightScale;
+    int      usePOM;
+    float    pad[3];
 };
 
 class D3DApp
@@ -38,6 +40,7 @@ public:
 private:
     bool InitWindow();
     bool InitD3D();
+    void InitImGui();
     void BuildShaders();
     void BuildRenderState();
     void BuildConstantBuffer();
@@ -76,4 +79,7 @@ private:
 
     Sphere mSphere;
     Camera mCamera;
+
+    bool  mUsePOM      = true;
+    float mHeightScale = 0.05f;
 };
