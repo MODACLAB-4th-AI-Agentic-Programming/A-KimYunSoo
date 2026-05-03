@@ -6,7 +6,7 @@ cbuffer cbPerObject : register(b0)
     float3   gCameraPos;
     float    gHeightScale;
     int      gUsePOM;
-    float3   gPad;
+    float3   gLightDir;
 };
 
 Texture2D    gDiffuseTex : register(t0);
@@ -70,8 +70,7 @@ float4 PS(PSInput input) : SV_TARGET
     float3 normalWS = normalize(mul(normalTS, TBN));
 
     // Lambert + ambient
-    float3 lightDir = normalize(float3(1.0, 1.0, -1.0));
-    float  NdotL    = saturate(dot(normalWS, lightDir));
+    float  NdotL    = saturate(dot(normalWS, normalize(gLightDir)));
     float3 lit      = diffuse.rgb * (NdotL * 0.85 + 0.15);
 
     return float4(lit, diffuse.a);

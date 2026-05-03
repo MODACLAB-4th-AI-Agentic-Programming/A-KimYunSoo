@@ -324,10 +324,15 @@ void D3DApp::LoadTextures()
 void D3DApp::Update(float dt)
 {
     mRotation += mRotSpeed * dt;
+    if (!mLightPaused)
+        mLightAngle += dt;
 
     D3D11_MAPPED_SUBRESOURCE mapped;
     mCtx->Map(mCBuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     auto* cb = reinterpret_cast<cbPerObject*>(mapped.pData);
+
+    XMVECTOR ld = XMVector3Normalize(XMVectorSet(1.0f, sinf(mLightAngle), -1.0f, 0.0f));
+    XMStoreFloat3(&cb->lightDir, ld);
 
     cb->world       = XMMatrixTranspose(XMMatrixRotationY(mRotation));
     cb->view        = XMMatrixTranspose(mCamera.GetView());
@@ -335,7 +340,6 @@ void D3DApp::Update(float dt)
     cb->cameraPos   = mCamera.position;
     cb->heightScale = mHeightScale;
     cb->usePOM      = mUsePOM ? 1 : 0;
-    cb->pad[0] = cb->pad[1] = cb->pad[2] = 0.0f;
 
     mCtx->Unmap(mCBuf, 0);
 }
@@ -370,6 +374,12 @@ void D3DApp::Render()
     ImGui::Checkbox("Enable POM", &mUsePOM);
     ImGui::SliderFloat("Height Scale", &mHeightScale, 0.01f, 0.2f);
     ImGui::SliderFloat("Rotation Speed", &mRotSpeed, 0.0f, 5.0f);
+    ImGui::Separator();
+    if (mLightPaused) {
+        if (ImGui::Button("Resume Light")) mLightPaused = false;
+    } else {
+        if (ImGui::Button("Stop Light"))   mLightPaused = true;
+    }
     ImGui::End();
 
     ImGui::Render();

@@ -24,7 +24,7 @@ struct cbPerObject
     XMFLOAT3 cameraPos;
     float    heightScale;
     int      usePOM;
-    float    pad[3];
+    XMFLOAT3 lightDir;
 };
 
 class D3DApp
@@ -85,4 +85,6 @@ private:
     float mHeightScale = 0.05f;
     float mRotation    = 0.0f;
     float mRotSpeed    = 1.0f;
+    float mLightAngle  = 0.0f;
+    bool  mLightPaused = false;
 };
