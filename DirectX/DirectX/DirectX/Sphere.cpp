@@ -44,9 +44,9 @@ void Sphere::Build(ID3D11Device* device, int stacks, int slices)
             UINT v2 = (i + 1) * (slices + 1) + j;
             UINT v3 = (i + 1) * (slices + 1) + (j + 1);
 
-            // CW winding (DX11 default front-face)
-            indices.push_back(v0); indices.push_back(v2); indices.push_back(v1);
-            indices.push_back(v2); indices.push_back(v3); indices.push_back(v1);
+            // CCW winding (FrontCounterClockwise = TRUE 기준)
+            indices.push_back(v0); indices.push_back(v1); indices.push_back(v2);
+            indices.push_back(v1); indices.push_back(v3); indices.push_back(v2);
         }
     }
 

@@ -75,6 +75,7 @@ private:
 
     ID3D11ShaderResourceView* mDiffuseSRV = nullptr;
     ID3D11ShaderResourceView* mHeightSRV  = nullptr;
+    ID3D11ShaderResourceView* mNormalSRV  = nullptr;
     ID3D11SamplerState*       mSampler    = nullptr;
 
     Sphere mSphere;
@@ -82,4 +83,6 @@ private:
 
     bool  mUsePOM      = true;
     float mHeightScale = 0.05f;
+    float mRotation    = 0.0f;
+    float mRotSpeed    = 1.0f;
 };

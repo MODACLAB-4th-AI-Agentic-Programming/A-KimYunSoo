@@ -29,6 +29,7 @@ D3DApp::~D3DApp()
     ImGui::DestroyContext();
 
     if (mSampler)    mSampler->Release();
+    if (mNormalSRV)  mNormalSRV->Release();
     if (mHeightSRV)  mHeightSRV->Release();
     if (mDiffuseSRV) mDiffuseSRV->Release();
     if (mCBuf)       mCBuf->Release();
@@ -317,15 +318,18 @@ void D3DApp::LoadTextures()
 {
     LoadTexture(L"../Texture/diffuse.png",      &mDiffuseSRV);
     LoadTexture(L"../Texture/displacement.png", &mHeightSRV);
+    LoadTexture(L"../Texture/normal.png",       &mNormalSRV);
 }
 
-void D3DApp::Update(float /*dt*/)
+void D3DApp::Update(float dt)
 {
+    mRotation += mRotSpeed * dt;
+
     D3D11_MAPPED_SUBRESOURCE mapped;
     mCtx->Map(mCBuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     auto* cb = reinterpret_cast<cbPerObject*>(mapped.pData);
 
-    cb->world       = XMMatrixTranspose(XMMatrixIdentity());
+    cb->world       = XMMatrixTranspose(XMMatrixRotationY(mRotation));
     cb->view        = XMMatrixTranspose(mCamera.GetView());
     cb->proj        = XMMatrixTranspose(mCamera.GetProj((float)mWidth / mHeight));
     cb->cameraPos   = mCamera.position;
@@ -351,8 +355,8 @@ void D3DApp::Render()
     mCtx->VSSetConstantBuffers(0, 1, &mCBuf);
     mCtx->PSSetConstantBuffers(0, 1, &mCBuf);
 
-    ID3D11ShaderResourceView* srvs[2] = { mDiffuseSRV, mHeightSRV };
-    mCtx->PSSetShaderResources(0, 2, srvs);
+    ID3D11ShaderResourceView* srvs[3] = { mDiffuseSRV, mHeightSRV, mNormalSRV };
+    mCtx->PSSetShaderResources(0, 3, srvs);
     mCtx->PSSetSamplers(0, 1, &mSampler);
 
     mSphere.Draw(mCtx);
@@ -365,6 +369,7 @@ void D3DApp::Render()
     ImGui::Begin("POM Controls");
     ImGui::Checkbox("Enable POM", &mUsePOM);
     ImGui::SliderFloat("Height Scale", &mHeightScale, 0.01f, 0.2f);
+    ImGui::SliderFloat("Rotation Speed", &mRotSpeed, 0.0f, 5.0f);
     ImGui::End();
 
     ImGui::Render();

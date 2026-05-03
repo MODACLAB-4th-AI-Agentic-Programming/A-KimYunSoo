@@ -11,6 +11,7 @@ cbuffer cbPerObject : register(b0)
 
 Texture2D    gDiffuseTex : register(t0);
 Texture2D    gHeightMap  : register(t1);
+Texture2D    gNormalMap  : register(t2);
 SamplerState gSampler    : register(s0);
 
 struct PSInput
@@ -48,18 +49,30 @@ float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS)
 float4 PS(PSInput input) : SV_TARGET
 {
     float3 viewDirWS = normalize(gCameraPos - input.posWS);
+
+    // TBN: world -> tangent space (rows = T, B, N)
     float3x3 TBN     = float3x3(input.tangentWS, input.bitangentWS, input.normalWS);
     float3 viewDirTS = normalize(mul(TBN, viewDirWS));
 
+    // POM: UV 오프셋 계산
     float2 finalUV = input.uv;
     if (gUsePOM && viewDirTS.z > 0.001)
         finalUV = ParallaxOcclusionMapping(input.uv, viewDirTS);
 
+    // Diffuse
     float4 diffuse = gDiffuseTex.Sample(gSampler, finalUV);
 
+    // Normal map decode + OpenGL->DX Y flip
+    float3 normalTS = gNormalMap.Sample(gSampler, finalUV).rgb * 2.0 - 1.0;
+    normalTS.y = -normalTS.y;
+
+    // 탄젠트 -> 월드 공간 변환: mul(v, TBN) = T*v.x + B*v.y + N*v.z
+    float3 normalWS = normalize(mul(normalTS, TBN));
+
+    // Lambert + ambient
     float3 lightDir = normalize(float3(1.0, 1.0, -1.0));
-    float  NdotL    = saturate(dot(normalize(input.normalWS), lightDir));
-    float3 lit      = diffuse.rgb * (NdotL * 0.8 + 0.2);
+    float  NdotL    = saturate(dot(normalWS, lightDir));
+    float3 lit      = diffuse.rgb * (NdotL * 0.85 + 0.15);
 
     return float4(lit, diffuse.a);
 }
