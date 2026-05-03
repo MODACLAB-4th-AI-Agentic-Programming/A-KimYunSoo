@@ -4,6 +4,7 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
+#include <wrl/client.h>
 #include <vector>
 #include "Camera.h"
 #include "Sphere.h"
@@ -14,6 +15,7 @@
 #pragma comment(lib, "windowscodecs.lib")
 
 using namespace DirectX;
+using Microsoft::WRL::ComPtr;
 
 // 16-byte aligned: 64+64+64+16+16 = 224 bytes
 struct cbPerObject
@@ -49,7 +51,7 @@ private:
     void Update(float dt);
     void Render();
 
-    HRESULT LoadTexture(const wchar_t* path, ID3D11ShaderResourceView** ppSRV);
+    HRESULT LoadTexture(const wchar_t* path, ComPtr<ID3D11ShaderResourceView>& outSRV);
 
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -59,24 +61,24 @@ private:
     int       mHeight  = 600;
     bool      mRunning = true;
 
-    ID3D11Device*            mDevice    = nullptr;
-    ID3D11DeviceContext*     mCtx       = nullptr;
-    IDXGISwapChain*          mSwapChain = nullptr;
-    ID3D11RenderTargetView*  mRTV       = nullptr;
-    ID3D11DepthStencilView*  mDSV       = nullptr;
-    ID3D11Texture2D*         mDepthTex  = nullptr;
+    ComPtr<ID3D11Device>            mDevice;
+    ComPtr<ID3D11DeviceContext>     mCtx;
+    ComPtr<IDXGISwapChain>          mSwapChain;
+    ComPtr<ID3D11RenderTargetView>  mRTV;
+    ComPtr<ID3D11DepthStencilView>  mDSV;
+    ComPtr<ID3D11Texture2D>         mDepthTex;
 
-    ID3D11VertexShader*      mVS      = nullptr;
-    ID3D11PixelShader*       mPS      = nullptr;
-    ID3D11InputLayout*       mLayout  = nullptr;
-    ID3D11RasterizerState*   mRSState = nullptr;
-    ID3D11DepthStencilState* mDSState = nullptr;
-    ID3D11Buffer*            mCBuf    = nullptr;
+    ComPtr<ID3D11VertexShader>      mVS;
+    ComPtr<ID3D11PixelShader>       mPS;
+    ComPtr<ID3D11InputLayout>       mLayout;
+    ComPtr<ID3D11RasterizerState>   mRSState;
+    ComPtr<ID3D11DepthStencilState> mDSState;
+    ComPtr<ID3D11Buffer>            mCBuf;
 
-    ID3D11ShaderResourceView* mDiffuseSRV = nullptr;
-    ID3D11ShaderResourceView* mHeightSRV  = nullptr;
-    ID3D11ShaderResourceView* mNormalSRV  = nullptr;
-    ID3D11SamplerState*       mSampler    = nullptr;
+    ComPtr<ID3D11ShaderResourceView> mDiffuseSRV;
+    ComPtr<ID3D11ShaderResourceView> mHeightSRV;
+    ComPtr<ID3D11ShaderResourceView> mNormalSRV;
+    ComPtr<ID3D11SamplerState>       mSampler;
 
     Sphere mSphere;
     Camera mCamera;

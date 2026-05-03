@@ -1,6 +1,5 @@
 #include "D3DApp.h"
 #include <wincodec.h>
-#include <cassert>
 #include "../ImGui/imgui.h"
 #include "../ImGui/imgui_impl_win32.h"
 #include "../ImGui/imgui_impl_dx11.h"
@@ -27,24 +26,8 @@ D3DApp::~D3DApp()
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
-
-    if (mSampler)    mSampler->Release();
-    if (mNormalSRV)  mNormalSRV->Release();
-    if (mHeightSRV)  mHeightSRV->Release();
-    if (mDiffuseSRV) mDiffuseSRV->Release();
-    if (mCBuf)       mCBuf->Release();
-    if (mDSState)    mDSState->Release();
-    if (mRSState)    mRSState->Release();
-    if (mLayout)     mLayout->Release();
-    if (mPS)         mPS->Release();
-    if (mVS)         mVS->Release();
-    if (mDepthTex)   mDepthTex->Release();
-    if (mDSV)        mDSV->Release();
-    if (mRTV)        mRTV->Release();
-    if (mSwapChain)  mSwapChain->Release();
-    if (mCtx)        mCtx->Release();
-    if (mDevice)     mDevice->Release();
     CoUninitialize();
+    // ComPtr members release automatically
 }
 
 bool D3DApp::Init()
@@ -53,7 +36,7 @@ bool D3DApp::Init()
     if (!InitWindow()) return false;
     if (!InitD3D())    return false;
     InitImGui();
-    mSphere.Build(mDevice);
+    mSphere.Build(mDevice.Get());
     BuildShaders();
     BuildRenderState();
     BuildConstantBuffer();
@@ -99,7 +82,6 @@ bool D3DApp::InitWindow()
         nullptr, nullptr, mhInst, nullptr);
 
     if (!mhWnd) return false;
-
     ShowWindow(mhWnd, SW_SHOW);
     UpdateWindow(mhWnd);
     return true;
@@ -126,10 +108,10 @@ bool D3DApp::InitD3D()
     HRESULT hr = D3D11CreateDeviceAndSwapChain(
         nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
         nullptr, 0, D3D11_SDK_VERSION,
-        &scd, &mSwapChain, &mDevice, &featureLevel, &mCtx);
+        &scd, mSwapChain.GetAddressOf(), mDevice.GetAddressOf(),
+        &featureLevel, mCtx.GetAddressOf());
 
     if (FAILED(hr)) return false;
-
     OnResize();
     return true;
 }
@@ -140,21 +122,20 @@ void D3DApp::InitImGui()
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
     ImGui_ImplWin32_Init(mhWnd);
-    ImGui_ImplDX11_Init(mDevice, mCtx);
+    ImGui_ImplDX11_Init(mDevice.Get(), mCtx.Get());
 }
 
 void D3DApp::OnResize()
 {
-    if (mRTV)      { mRTV->Release();      mRTV = nullptr; }
-    if (mDSV)      { mDSV->Release();      mDSV = nullptr; }
-    if (mDepthTex) { mDepthTex->Release(); mDepthTex = nullptr; }
+    mRTV.Reset();
+    mDSV.Reset();
+    mDepthTex.Reset();
 
     mSwapChain->ResizeBuffers(0, mWidth, mHeight, DXGI_FORMAT_UNKNOWN, 0);
 
-    ID3D11Texture2D* backBuffer = nullptr;
-    mSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
-    mDevice->CreateRenderTargetView(backBuffer, nullptr, &mRTV);
-    backBuffer->Release();
+    ComPtr<ID3D11Texture2D> backBuffer;
+    mSwapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf()));
+    mDevice->CreateRenderTargetView(backBuffer.Get(), nullptr, mRTV.GetAddressOf());
 
     D3D11_TEXTURE2D_DESC dd = {};
     dd.Width                = mWidth;
@@ -164,15 +145,17 @@ void D3DApp::OnResize()
     dd.Format               = DXGI_FORMAT_D24_UNORM_S8_UINT;
     dd.SampleDesc.Count     = 1;
     dd.BindFlags            = D3D11_BIND_DEPTH_STENCIL;
-    mDevice->CreateTexture2D(&dd, nullptr, &mDepthTex);
-    mDevice->CreateDepthStencilView(mDepthTex, nullptr, &mDSV);
+    mDevice->CreateTexture2D(&dd, nullptr, mDepthTex.GetAddressOf());
+    mDevice->CreateDepthStencilView(mDepthTex.Get(), nullptr, mDSV.GetAddressOf());
 
     D3D11_VIEWPORT vp = {};
     vp.Width          = (float)mWidth;
     vp.Height         = (float)mHeight;
     vp.MaxDepth       = 1.0f;
     mCtx->RSSetViewports(1, &vp);
-    mCtx->OMSetRenderTargets(1, &mRTV, mDSV);
+
+    ID3D11RenderTargetView* rtvRaw = mRTV.Get();
+    mCtx->OMSetRenderTargets(1, &rtvRaw, mDSV.Get());
 }
 
 void D3DApp::BuildShaders()
@@ -182,33 +165,26 @@ void D3DApp::BuildShaders()
     flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
-    ID3DBlob* vsBlob  = nullptr;
-    ID3DBlob* psBlob  = nullptr;
-    ID3DBlob* errBlob = nullptr;
+    ComPtr<ID3DBlob> vsBlob, psBlob, errBlob;
 
     HRESULT hr = D3DCompileFromFile(L"Shader/POM_VS.hlsl", nullptr, nullptr,
-        "VS", "vs_5_0", flags, 0, &vsBlob, &errBlob);
+        "VS", "vs_5_0", flags, 0, vsBlob.GetAddressOf(), errBlob.GetAddressOf());
     if (FAILED(hr)) {
-        if (errBlob) {
-            OutputDebugStringA((char*)errBlob->GetBufferPointer());
-            errBlob->Release();
-        }
+        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
         return;
     }
 
     hr = D3DCompileFromFile(L"Shader/POM_PS.hlsl", nullptr, nullptr,
-        "PS", "ps_5_0", flags, 0, &psBlob, &errBlob);
+        "PS", "ps_5_0", flags, 0, psBlob.GetAddressOf(), errBlob.GetAddressOf());
     if (FAILED(hr)) {
-        if (errBlob) {
-            OutputDebugStringA((char*)errBlob->GetBufferPointer());
-            errBlob->Release();
-        }
-        vsBlob->Release();
+        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
         return;
     }
 
-    mDevice->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &mVS);
-    mDevice->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &mPS);
+    mDevice->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+        nullptr, mVS.GetAddressOf());
+    mDevice->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
+        nullptr, mPS.GetAddressOf());
 
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -218,10 +194,7 @@ void D3DApp::BuildShaders()
         { "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
     mDevice->CreateInputLayout(layout, 5,
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &mLayout);
-
-    vsBlob->Release();
-    psBlob->Release();
+        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), mLayout.GetAddressOf());
 }
 
 void D3DApp::BuildRenderState()
@@ -231,13 +204,13 @@ void D3DApp::BuildRenderState()
     rd.CullMode              = D3D11_CULL_BACK;
     rd.FrontCounterClockwise = FALSE;
     rd.DepthClipEnable       = TRUE;
-    mDevice->CreateRasterizerState(&rd, &mRSState);
+    mDevice->CreateRasterizerState(&rd, mRSState.GetAddressOf());
 
     D3D11_DEPTH_STENCIL_DESC dsd = {};
     dsd.DepthEnable              = TRUE;
     dsd.DepthWriteMask           = D3D11_DEPTH_WRITE_MASK_ALL;
     dsd.DepthFunc                = D3D11_COMPARISON_LESS;
-    mDevice->CreateDepthStencilState(&dsd, &mDSState);
+    mDevice->CreateDepthStencilState(&dsd, mDSState.GetAddressOf());
 
     D3D11_SAMPLER_DESC sd = {};
     sd.Filter             = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -246,7 +219,7 @@ void D3DApp::BuildRenderState()
     sd.AddressW           = D3D11_TEXTURE_ADDRESS_WRAP;
     sd.MaxAnisotropy      = 1;
     sd.MaxLOD             = D3D11_FLOAT32_MAX;
-    mDevice->CreateSamplerState(&sd, &mSampler);
+    mDevice->CreateSamplerState(&sd, mSampler.GetAddressOf());
 }
 
 void D3DApp::BuildConstantBuffer()
@@ -256,40 +229,34 @@ void D3DApp::BuildConstantBuffer()
     cbd.BindFlags         = D3D11_BIND_CONSTANT_BUFFER;
     cbd.Usage             = D3D11_USAGE_DYNAMIC;
     cbd.CPUAccessFlags    = D3D11_CPU_ACCESS_WRITE;
-    mDevice->CreateBuffer(&cbd, nullptr, &mCBuf);
+    mDevice->CreateBuffer(&cbd, nullptr, mCBuf.GetAddressOf());
 }
 
-HRESULT D3DApp::LoadTexture(const wchar_t* path, ID3D11ShaderResourceView** ppSRV)
+HRESULT D3DApp::LoadTexture(const wchar_t* path, ComPtr<ID3D11ShaderResourceView>& outSRV)
 {
-    *ppSRV = nullptr;
-
-    IWICImagingFactory* wic = nullptr;
+    ComPtr<IWICImagingFactory> wic;
     HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr,
-        CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));
+        CLSCTX_INPROC_SERVER, IID_PPV_ARGS(wic.GetAddressOf()));
     if (FAILED(hr)) return hr;
 
-    IWICBitmapDecoder* decoder = nullptr;
+    ComPtr<IWICBitmapDecoder> decoder;
     hr = wic->CreateDecoderFromFilename(path, nullptr, GENERIC_READ,
-        WICDecodeMetadataCacheOnLoad, &decoder);
-    if (FAILED(hr)) { wic->Release(); return hr; }
+        WICDecodeMetadataCacheOnLoad, decoder.GetAddressOf());
+    if (FAILED(hr)) return hr;
 
-    IWICBitmapFrameDecode* frame = nullptr;
-    hr = decoder->GetFrame(0, &frame);
-    decoder->Release();
-    if (FAILED(hr)) { wic->Release(); return hr; }
+    ComPtr<IWICBitmapFrameDecode> frame;
+    hr = decoder->GetFrame(0, frame.GetAddressOf());
+    if (FAILED(hr)) return hr;
 
-    IWICFormatConverter* conv = nullptr;
-    wic->CreateFormatConverter(&conv);
-    conv->Initialize(frame, GUID_WICPixelFormat32bppRGBA,
+    ComPtr<IWICFormatConverter> conv;
+    wic->CreateFormatConverter(conv.GetAddressOf());
+    conv->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
         WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
-    frame->Release();
 
     UINT w = 0, h = 0;
     conv->GetSize(&w, &h);
     std::vector<BYTE> pixels(w * h * 4);
     conv->CopyPixels(nullptr, w * 4, (UINT)pixels.size(), pixels.data());
-    conv->Release();
-    wic->Release();
 
     D3D11_TEXTURE2D_DESC td = {};
     td.Width                = w;
@@ -305,20 +272,18 @@ HRESULT D3DApp::LoadTexture(const wchar_t* path, ID3D11ShaderResourceView** ppSR
     initData.pSysMem                = pixels.data();
     initData.SysMemPitch            = w * 4;
 
-    ID3D11Texture2D* tex = nullptr;
-    hr = mDevice->CreateTexture2D(&td, &initData, &tex);
+    ComPtr<ID3D11Texture2D> tex;
+    hr = mDevice->CreateTexture2D(&td, &initData, tex.GetAddressOf());
     if (FAILED(hr)) return hr;
 
-    hr = mDevice->CreateShaderResourceView(tex, nullptr, ppSRV);
-    tex->Release();
-    return hr;
+    return mDevice->CreateShaderResourceView(tex.Get(), nullptr, outSRV.GetAddressOf());
 }
 
 void D3DApp::LoadTextures()
 {
-    LoadTexture(L"../Texture/diffuse.png",      &mDiffuseSRV);
-    LoadTexture(L"../Texture/displacement.png", &mHeightSRV);
-    LoadTexture(L"../Texture/normal.png",       &mNormalSRV);
+    LoadTexture(L"../Texture/diffuse.png",      mDiffuseSRV);
+    LoadTexture(L"../Texture/displacement.png", mHeightSRV);
+    LoadTexture(L"../Texture/normal.png",       mNormalSRV);
 }
 
 void D3DApp::Update(float dt)
@@ -328,7 +293,7 @@ void D3DApp::Update(float dt)
         mLightAngle += dt;
 
     D3D11_MAPPED_SUBRESOURCE mapped;
-    mCtx->Map(mCBuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    mCtx->Map(mCBuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     auto* cb = reinterpret_cast<cbPerObject*>(mapped.pData);
 
     XMVECTOR ld = XMVector3Normalize(XMVectorSet(1.0f, sinf(mLightAngle), -1.0f, 0.0f));
@@ -341,31 +306,34 @@ void D3DApp::Update(float dt)
     cb->heightScale = mHeightScale;
     cb->usePOM      = mUsePOM ? 1 : 0;
 
-    mCtx->Unmap(mCBuf, 0);
+    mCtx->Unmap(mCBuf.Get(), 0);
 }
 
 void D3DApp::Render()
 {
     const float clearColor[4] = { 0.1f, 0.1f, 0.15f, 1.0f };
-    mCtx->ClearRenderTargetView(mRTV, clearColor);
-    mCtx->ClearDepthStencilView(mDSV, D3D11_CLEAR_DEPTH, 1.0f, 0);
+    mCtx->ClearRenderTargetView(mRTV.Get(), clearColor);
+    mCtx->ClearDepthStencilView(mDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-    mCtx->IASetInputLayout(mLayout);
-    mCtx->VSSetShader(mVS, nullptr, 0);
-    mCtx->PSSetShader(mPS, nullptr, 0);
-    mCtx->RSSetState(mRSState);
-    mCtx->OMSetDepthStencilState(mDSState, 0);
+    mCtx->IASetInputLayout(mLayout.Get());
+    mCtx->VSSetShader(mVS.Get(), nullptr, 0);
+    mCtx->PSSetShader(mPS.Get(), nullptr, 0);
+    mCtx->RSSetState(mRSState.Get());
+    mCtx->OMSetDepthStencilState(mDSState.Get(), 0);
 
-    mCtx->VSSetConstantBuffers(0, 1, &mCBuf);
-    mCtx->PSSetConstantBuffers(0, 1, &mCBuf);
+    ID3D11Buffer* cb = mCBuf.Get();
+    mCtx->VSSetConstantBuffers(0, 1, &cb);
+    mCtx->PSSetConstantBuffers(0, 1, &cb);
 
-    ID3D11ShaderResourceView* srvs[3] = { mDiffuseSRV, mHeightSRV, mNormalSRV };
+    ID3D11ShaderResourceView* srvs[3] = {
+        mDiffuseSRV.Get(), mHeightSRV.Get(), mNormalSRV.Get() };
     mCtx->PSSetShaderResources(0, 3, srvs);
-    mCtx->PSSetSamplers(0, 1, &mSampler);
 
-    mSphere.Draw(mCtx);
+    ID3D11SamplerState* samp = mSampler.Get();
+    mCtx->PSSetSamplers(0, 1, &samp);
 
-    // ImGui
+    mSphere.Draw(mCtx.Get());
+
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -396,14 +364,9 @@ LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         PostQuitMessage(0);
         mRunning = false;
         return 0;
-
     case WM_KEYDOWN:
-        if (wParam == VK_ESCAPE) {
-            PostQuitMessage(0);
-            mRunning = false;
-        }
+        if (wParam == VK_ESCAPE) { PostQuitMessage(0); mRunning = false; }
         return 0;
-
     case WM_SIZE:
         if (mDevice && LOWORD(lParam) > 0 && HIWORD(lParam) > 0) {
             mWidth  = LOWORD(lParam);

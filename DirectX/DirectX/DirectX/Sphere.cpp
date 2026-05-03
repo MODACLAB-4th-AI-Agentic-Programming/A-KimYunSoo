@@ -57,28 +57,23 @@ void Sphere::Build(ID3D11Device* device, int stacks, int slices)
     vbd.BindFlags             = D3D11_BIND_VERTEX_BUFFER;
     vbd.Usage                 = D3D11_USAGE_IMMUTABLE;
     D3D11_SUBRESOURCE_DATA vd = { vertices.data() };
-    device->CreateBuffer(&vbd, &vd, &mVB);
+    device->CreateBuffer(&vbd, &vd, mVB.GetAddressOf());
 
     D3D11_BUFFER_DESC ibd     = {};
     ibd.ByteWidth             = (UINT)(sizeof(UINT) * indices.size());
     ibd.BindFlags             = D3D11_BIND_INDEX_BUFFER;
     ibd.Usage                 = D3D11_USAGE_IMMUTABLE;
     D3D11_SUBRESOURCE_DATA id = { indices.data() };
-    device->CreateBuffer(&ibd, &id, &mIB);
+    device->CreateBuffer(&ibd, &id, mIB.GetAddressOf());
 }
 
 void Sphere::Draw(ID3D11DeviceContext* ctx)
 {
     UINT stride = sizeof(Vertex);
     UINT offset = 0;
-    ctx->IASetVertexBuffers(0, 1, &mVB, &stride, &offset);
-    ctx->IASetIndexBuffer(mIB, DXGI_FORMAT_R32_UINT, 0);
+    ctx->IASetVertexBuffers(0, 1, mVB.GetAddressOf(), &stride, &offset);
+    ctx->IASetIndexBuffer(mIB.Get(), DXGI_FORMAT_R32_UINT, 0);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ctx->DrawIndexed(mIndexCount, 0, 0);
 }
 
-Sphere::~Sphere()
-{
-    if (mVB) mVB->Release();
-    if (mIB) mIB->Release();
-}
