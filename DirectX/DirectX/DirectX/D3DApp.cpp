@@ -376,22 +376,50 @@ void D3DApp::Update(float dt)
     if (!mLightPaused)
         mLightAngle += dt;
 
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    mCtx->Map(mCBuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    auto* cb = reinterpret_cast<cbPerObject*>(mapped.pData);
-
-    cb->world       = XMMatrixTranspose(XMMatrixRotationY(mRotation));
-    cb->view        = XMMatrixTranspose(mCamera.GetView());
-    cb->proj        = XMMatrixTranspose(mCamera.GetProj((float)mWidth / mHeight));
-    cb->cameraPos   = mCamera.position;
-    cb->heightScale = mHeightScale;
-    cb->specPower   = mSpecPower;
-    cb->usePOM      = mUsePOM ? 1 : 0;
-
+    // Light direction (기존과 동일)
     XMVECTOR ld = XMVector3Normalize(XMVectorSet(1.0f, sinf(mLightAngle), -1.0f, 0.0f));
-    XMStoreFloat3(&cb->lightDir, ld);
 
-    mCtx->Unmap(mCBuf.Get(), 0);
+    // Light camera 계산
+    XMVECTOR lightPos = XMVectorScale(ld, -20.0f);
+    XMVECTOR up       = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    if (fabsf(XMVectorGetY(ld)) > 0.99f)
+        up = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+    XMMATRIX lightView = XMMatrixLookAtLH(lightPos, XMVectorZero(), up);
+    XMMATRIX lightProj = XMMatrixOrthographicLH(12.0f, 12.0f, 0.1f, 50.0f);
+    mLightViewProj = lightView * lightProj;
+
+    // Shadow CB 업데이트 (Shadow VS용)
+    {
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        mCtx->Map(mShadowCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        auto* cb = reinterpret_cast<cbShadow*>(mapped.pData);
+        cb->lightViewProj = XMMatrixTranspose(mLightViewProj);
+        mCtx->Unmap(mShadowCB.Get(), 0);
+    }
+
+    // Main CB 업데이트 (기존 + shadow params)
+    {
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        mCtx->Map(mCBuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        auto* cb = reinterpret_cast<cbPerObject*>(mapped.pData);
+
+        cb->world       = XMMatrixTranspose(XMMatrixRotationY(mRotation));
+        cb->view        = XMMatrixTranspose(mCamera.GetView());
+        cb->proj        = XMMatrixTranspose(mCamera.GetProj((float)mWidth / mHeight));
+        cb->cameraPos   = mCamera.position;
+        cb->heightScale = mHeightScale;
+        cb->specPower   = mSpecPower;
+        cb->usePOM      = mUsePOM ? 1 : 0;
+        XMStoreFloat3(&cb->lightDir, ld);
+
+        cb->lightViewProj   = XMMatrixTranspose(mLightViewProj);
+        cb->shadowBias      = mShadowBias;
+        cb->pcfKernel       = mPCFKernel;
+        cb->shadowIntensity = mShadowIntensity;
+        cb->shadowPad       = 0;
+
+        mCtx->Unmap(mCBuf.Get(), 0);
+    }
 }
 
 void D3DApp::Render()
