@@ -197,6 +197,26 @@ void D3DApp::BuildShaders()
     };
     mDevice->CreateInputLayout(layout, 5,
         vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), mLayout.GetAddressOf());
+
+    // Shadow VS 컴파일
+    ComPtr<ID3DBlob> shadowVsBlob;
+    hr = D3DCompileFromFile(L"Shader/Shadow_VS.hlsl", nullptr, nullptr,
+        "main", "vs_5_0", flags, 0, shadowVsBlob.GetAddressOf(), errBlob.GetAddressOf());
+    if (FAILED(hr)) {
+        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
+        return;
+    }
+    mDevice->CreateVertexShader(shadowVsBlob->GetBufferPointer(), shadowVsBlob->GetBufferSize(),
+        nullptr, mShadowVS.GetAddressOf());
+
+    // Shadow 전용 InputLayout (POSITION만)
+    D3D11_INPUT_ELEMENT_DESC shadowLayoutDesc[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+          D3D11_INPUT_PER_VERTEX_DATA, 0 }
+    };
+    mDevice->CreateInputLayout(shadowLayoutDesc, 1,
+        shadowVsBlob->GetBufferPointer(), shadowVsBlob->GetBufferSize(),
+        mShadowLayout.GetAddressOf());
 }
 
 void D3DApp::BuildRenderState()
