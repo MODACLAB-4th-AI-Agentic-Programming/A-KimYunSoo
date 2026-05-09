@@ -37,9 +37,11 @@ bool D3DApp::Init()
     if (!InitD3D())    return false;
     InitImGui();
     mSphere.Build(mDevice.Get());
+    mQuad.Build(mDevice.Get());
     BuildShaders();
     BuildRenderState();
     BuildConstantBuffer();
+    BuildShadowResources();
     LoadTextures();
     return true;
 }
@@ -232,6 +234,68 @@ void D3DApp::BuildConstantBuffer()
     mDevice->CreateBuffer(&cbd, nullptr, mCBuf.GetAddressOf());
 }
 
+void D3DApp::BuildShadowResources()
+{
+    // 1. Shadow map 텍스처 (1024×1024, TYPELESS)
+    D3D11_TEXTURE2D_DESC td = {};
+    td.Width          = 1024;
+    td.Height         = 1024;
+    td.MipLevels      = 1;
+    td.ArraySize      = 1;
+    td.Format         = DXGI_FORMAT_R32_TYPELESS;
+    td.SampleDesc.Count = 1;
+    td.Usage          = D3D11_USAGE_DEFAULT;
+    td.BindFlags      = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+    mDevice->CreateTexture2D(&td, nullptr, mShadowTex.GetAddressOf());
+
+    // 2. DSV: D32_FLOAT
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+    dsvDesc.Format             = DXGI_FORMAT_D32_FLOAT;
+    dsvDesc.ViewDimension      = D3D11_DSV_DIMENSION_TEXTURE2D;
+    dsvDesc.Texture2D.MipSlice = 0;
+    mDevice->CreateDepthStencilView(mShadowTex.Get(), &dsvDesc, mShadowDSV.GetAddressOf());
+
+    // 3. SRV: R32_FLOAT (PS에서 읽기용)
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format                    = DXGI_FORMAT_R32_FLOAT;
+    srvDesc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels       = 1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    mDevice->CreateShaderResourceView(mShadowTex.Get(), &srvDesc, mShadowSRV.GetAddressOf());
+
+    // 4. Comparison Sampler (하드웨어 PCF)
+    D3D11_SAMPLER_DESC sd = {};
+    sd.Filter         = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+    sd.AddressU       = D3D11_TEXTURE_ADDRESS_BORDER;
+    sd.AddressV       = D3D11_TEXTURE_ADDRESS_BORDER;
+    sd.AddressW       = D3D11_TEXTURE_ADDRESS_BORDER;
+    sd.BorderColor[0] = 1.0f;
+    sd.BorderColor[1] = 1.0f;
+    sd.BorderColor[2] = 1.0f;
+    sd.BorderColor[3] = 1.0f;
+    sd.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+    sd.MaxLOD         = D3D11_FLOAT32_MAX;
+    mDevice->CreateSamplerState(&sd, mShadowSampler.GetAddressOf());
+
+    // 5. Shadow RS: SlopeScaledDepthBias로 self-shadow acne 처리
+    D3D11_RASTERIZER_DESC rd = {};
+    rd.FillMode             = D3D11_FILL_SOLID;
+    rd.CullMode             = D3D11_CULL_BACK;
+    rd.DepthBias            = 100;
+    rd.SlopeScaledDepthBias = 2.0f;
+    rd.DepthBiasClamp       = 0.01f;
+    rd.DepthClipEnable      = TRUE;
+    mDevice->CreateRasterizerState(&rd, mShadowRS.GetAddressOf());
+
+    // 6. Shadow CB (Shadow VS용, 64 bytes)
+    D3D11_BUFFER_DESC cbd = {};
+    cbd.ByteWidth      = sizeof(cbShadow);
+    cbd.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+    cbd.Usage          = D3D11_USAGE_DYNAMIC;
+    cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    mDevice->CreateBuffer(&cbd, nullptr, mShadowCB.GetAddressOf());
+}
+
 HRESULT D3DApp::LoadTexture(const wchar_t* path, ComPtr<ID3D11ShaderResourceView>& outSRV)
 {
     ComPtr<IWICImagingFactory> wic;
@@ -333,13 +397,19 @@ void D3DApp::Render()
     ID3D11SamplerState* samp = mSampler.Get();
     mCtx->PSSetSamplers(0, 1, &samp);
 
-    mSphere.Draw(mCtx.Get());
+    if (mMeshMode == 0)
+        mSphere.Draw(mCtx.Get());
+    else
+        mQuad.Draw(mCtx.Get());
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
     ImGui::Begin("POM Controls");
+    const char* meshItems[] = { "Sphere", "Quad" };
+    ImGui::Combo("Mesh", &mMeshMode, meshItems, 2);
+    ImGui::Separator();
     ImGui::Checkbox("Enable POM", &mUsePOM);
     ImGui::SliderFloat("Height Scale", &mHeightScale, 0.01f, 0.2f);
     ImGui::SliderFloat("Rotation Speed", &mRotSpeed, 0.0f, 5.0f);
