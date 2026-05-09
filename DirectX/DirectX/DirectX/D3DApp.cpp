@@ -422,6 +422,40 @@ void D3DApp::Update(float dt)
     }
 }
 
+void D3DApp::RenderShadowPass()
+{
+    // SRV → DSV로 전환 전에 SRV 언바인드 (resource hazard 방지)
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    mCtx->PSSetShaderResources(3, 1, &nullSRV);
+
+    // RTV 없음, Shadow DSV 바인딩
+    mCtx->OMSetRenderTargets(0, nullptr, mShadowDSV.Get());
+    mCtx->ClearDepthStencilView(mShadowDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+    // Shadow 전용 뷰포트 (1024×1024)
+    D3D11_VIEWPORT vp = {};
+    vp.Width    = 1024.0f;
+    vp.Height   = 1024.0f;
+    vp.MaxDepth = 1.0f;
+    mCtx->RSSetViewports(1, &vp);
+
+    // Shadow VS + Layout
+    mCtx->IASetInputLayout(mShadowLayout.Get());
+    mCtx->VSSetShader(mShadowVS.Get(), nullptr, 0);
+    mCtx->PSSetShader(nullptr, nullptr, 0);
+
+    // Shadow RS (depth bias)
+    mCtx->RSSetState(mShadowRS.Get());
+
+    // Shadow CB → VS b0
+    ID3D11Buffer* scb = mShadowCB.Get();
+    mCtx->VSSetConstantBuffers(0, 1, &scb);
+
+    // Sphere, Quad 모두 그림자 드리움 (mMeshMode 무관)
+    mSphere.Draw(mCtx.Get());
+    mQuad.Draw(mCtx.Get());
+}
+
 void D3DApp::Render()
 {
     const float clearColor[4] = { 0.1f, 0.1f, 0.15f, 1.0f };
