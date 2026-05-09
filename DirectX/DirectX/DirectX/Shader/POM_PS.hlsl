@@ -9,12 +9,20 @@ cbuffer cbPerObject : register(b0)
     float    gSpecPower;
     int      gUsePOM;
     int      pad[3];
+    float4x4 gLightViewProj;
+    float    gShadowBias;
+    int      gPCFKernel;
+    float    gShadowIntensity;
+    int      gShadowPad;
 };
 
 Texture2D    gDiffuseTex : register(t0);
 Texture2D    gHeightMap  : register(t1);
 Texture2D    gNormalMap  : register(t2);
 SamplerState gSampler    : register(s0);
+
+Texture2D              gShadowMap  : register(t3);
+SamplerComparisonState gShadowSamp : register(s1);
 
 struct PSInput
 {
@@ -26,9 +34,34 @@ struct PSInput
     float3 posWS       : TEXCOORD4;
 };
 
+float CalcShadowFactor(float3 posW)
+{
+    float4 posL = mul(float4(posW, 1.0f), gLightViewProj);
+    posL.xyz   /= posL.w;
+
+    float2 uv = float2(posL.x * 0.5f + 0.5f, -posL.y * 0.5f + 0.5f);
+
+    // 빛 프러스텀 밖은 그림자 없음
+    if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+        return 1.0f;
+
+    float  depth      = posL.z - gShadowBias;
+    float  shadow     = 0.0f;
+    float  texelSize  = 1.0f / 1024.0f;
+    int    radius     = gPCFKernel / 2;
+    float  total      = (float)(gPCFKernel * gPCFKernel);
+
+    for (int y = -radius; y <= radius; ++y)
+    for (int x = -radius; x <= radius; ++x)
+        shadow += gShadowMap.SampleCmpLevelZero(
+            gShadowSamp, uv + float2(x, y) * texelSize, depth);
+
+    return lerp(1.0f - gShadowIntensity, 1.0f, shadow / total);
+}
+
 float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS)
 {
-    float numLayers  = lerp(32.0, 8.0, saturate(abs(viewDirTS.z)));
+    float numLayers  = lerp(64.0, 16.0, saturate(viewDirTS.z));
     float layerDepth = 1.0 / numLayers;
     float2 uvStep    = (viewDirTS.xy / viewDirTS.z) * gHeightScale * layerDepth;
 
@@ -36,16 +69,36 @@ float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS)
     float2 currentUV    = uv;
     float  h            = gHeightMap.Sample(gSampler, currentUV).r;
 
+    float2 prevUV    = currentUV;
+    float  prevDepth = 0.0;
+
+    // 1단계: 교차 구간 탐색
     [loop]
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 64; i++)
     {
         if (currentDepth >= h) break;
-        currentUV    -= uvStep;
-        h             = gHeightMap.Sample(gSampler, currentUV).r;
+        prevUV       = currentUV;
+        prevDepth    = currentDepth;
+        currentUV   -= uvStep;
         currentDepth += layerDepth;
+        h            = gHeightMap.Sample(gSampler, currentUV).r;
     }
 
-    return currentUV;
+    // 2단계: 이진 탐색으로 교차점 정밀화 (선형 보간은 급경사 홈에서 오차 큼)
+    [unroll]
+    for (int j = 0; j < 8; j++)
+    {
+        float2 midUV    = (prevUV + currentUV) * 0.5;
+        float  midDepth = (prevDepth + currentDepth) * 0.5;
+        float  midH     = gHeightMap.Sample(gSampler, midUV).r;
+
+        if (midDepth < midH)
+        { prevUV = midUV; prevDepth = midDepth; }
+        else
+        { currentUV = midUV; currentDepth = midDepth; }
+    }
+
+    return (prevUV + currentUV) * 0.5;
 }
 
 float4 PS(PSInput input) : SV_TARGET
@@ -81,8 +134,10 @@ float4 PS(PSInput input) : SV_TARGET
     float NdotH = saturate(dot(normalWS, H));
     float spec  = pow(NdotH, gSpecPower);
 
-    float3 lit = diffuse.rgb * (NdotL * 0.85 + 0.15)
-               + float3(1.0, 1.0, 1.0) * spec * 0.6 * NdotL;
+    float shadowFactor = CalcShadowFactor(input.posWS);
+
+    float3 lit = (diffuse.rgb * (NdotL * 0.85 + 0.15)
+               + float3(1.0, 1.0, 1.0) * spec * 0.6 * NdotL) * shadowFactor;
 
     return float4(lit, diffuse.a);
 }
