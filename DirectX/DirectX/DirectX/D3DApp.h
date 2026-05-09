@@ -8,6 +8,7 @@
 #include <vector>
 #include "Camera.h"
 #include "Sphere.h"
+#include "Quad.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -17,18 +18,29 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-// 16-byte aligned: 64+64+64+16+16+16 = 240 bytes
+// Shadow VS 전용 상수 버퍼 (64 bytes)
+struct cbShadow
+{
+    XMMATRIX lightViewProj;
+};
+
+// 16-byte aligned: 총 320 bytes
 struct cbPerObject
 {
-    XMMATRIX world;
-    XMMATRIX view;
-    XMMATRIX proj;
-    XMFLOAT3 cameraPos;   // block [192-207]
-    float    heightScale;
-    XMFLOAT3 lightDir;    // block [208-223]
-    float    specPower;
-    int      usePOM;      // block [224-239]
-    int      pad[3];
+    XMMATRIX world;           // 64  [0-63]
+    XMMATRIX view;            // 64  [64-127]
+    XMMATRIX proj;            // 64  [128-191]
+    XMFLOAT3 cameraPos;       // 12  [192-203]
+    float    heightScale;     //  4  [204-207]
+    XMFLOAT3 lightDir;        // 12  [208-219]
+    float    specPower;       //  4  [220-223]
+    int      usePOM;          //  4  [224-227]
+    int      pad[3];          // 12  [228-239]
+    XMMATRIX lightViewProj;   // 64  [240-303]
+    float    shadowBias;      //  4  [304-307]
+    int      pcfKernel;       //  4  [308-311]
+    float    shadowIntensity; //  4  [312-315]
+    int      shadowPad;       //  4  [316-319]
 };
 
 class D3DApp
@@ -48,6 +60,9 @@ private:
     void BuildShaders();
     void BuildRenderState();
     void BuildConstantBuffer();
+    void BuildShadowResources();
+    void RenderShadowPass();
+    void RenderMainPass();
     void LoadTextures();
     void OnResize();
     void Update(float dt);
@@ -77,13 +92,32 @@ private:
     ComPtr<ID3D11DepthStencilState> mDSState;
     ComPtr<ID3D11Buffer>            mCBuf;
 
+    // Shadow map GPU 리소스
+    ComPtr<ID3D11Texture2D>          mShadowTex;
+    ComPtr<ID3D11DepthStencilView>   mShadowDSV;
+    ComPtr<ID3D11ShaderResourceView> mShadowSRV;
+    ComPtr<ID3D11SamplerState>       mShadowSampler;
+    ComPtr<ID3D11VertexShader>       mShadowVS;
+    ComPtr<ID3D11InputLayout>        mShadowLayout;
+    ComPtr<ID3D11Buffer>             mShadowCB;
+    ComPtr<ID3D11RasterizerState>    mShadowRS;
+
+    // Shadow 파라미터 (ImGui 제어)
+    float    mShadowBias      = 0.002f;
+    int      mPCFKernel       = 3;
+    float    mShadowIntensity = 0.75f;
+    XMMATRIX mLightViewProj   = XMMatrixIdentity();
+
     ComPtr<ID3D11ShaderResourceView> mDiffuseSRV;
     ComPtr<ID3D11ShaderResourceView> mHeightSRV;
     ComPtr<ID3D11ShaderResourceView> mNormalSRV;
     ComPtr<ID3D11SamplerState>       mSampler;
 
     Sphere mSphere;
+    Quad   mQuad;
     Camera mCamera;
+
+    int   mMeshMode    = 0;  // 0 = Sphere, 1 = Quad
 
     bool  mUsePOM      = true;
     float mHeightScale = 0.05f;
