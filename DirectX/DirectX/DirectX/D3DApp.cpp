@@ -456,34 +456,55 @@ void D3DApp::RenderShadowPass()
     mQuad.Draw(mCtx.Get());
 }
 
-void D3DApp::Render()
+void D3DApp::RenderMainPass()
 {
+    // 뷰포트 복구 (메인 렌더 해상도)
+    D3D11_VIEWPORT vp = {};
+    vp.Width    = (float)mWidth;
+    vp.Height   = (float)mHeight;
+    vp.MaxDepth = 1.0f;
+    mCtx->RSSetViewports(1, &vp);
+
+    // RTV + DSV 복구
+    ID3D11RenderTargetView* rtvRaw = mRTV.Get();
+    mCtx->OMSetRenderTargets(1, &rtvRaw, mDSV.Get());
+
     const float clearColor[4] = { 0.1f, 0.1f, 0.15f, 1.0f };
     mCtx->ClearRenderTargetView(mRTV.Get(), clearColor);
     mCtx->ClearDepthStencilView(mDSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
+    // 메인 셰이더 + 상태
     mCtx->IASetInputLayout(mLayout.Get());
     mCtx->VSSetShader(mVS.Get(), nullptr, 0);
     mCtx->PSSetShader(mPS.Get(), nullptr, 0);
     mCtx->RSSetState(mRSState.Get());
     mCtx->OMSetDepthStencilState(mDSState.Get(), 0);
 
+    // CB 바인딩
     ID3D11Buffer* cb = mCBuf.Get();
     mCtx->VSSetConstantBuffers(0, 1, &cb);
     mCtx->PSSetConstantBuffers(0, 1, &cb);
 
-    ID3D11ShaderResourceView* srvs[3] = {
-        mDiffuseSRV.Get(), mHeightSRV.Get(), mNormalSRV.Get() };
-    mCtx->PSSetShaderResources(0, 3, srvs);
+    // 텍스처 SRV (t0~t2: diffuse/height/normal, t3: shadow map)
+    ID3D11ShaderResourceView* srvs[4] = {
+        mDiffuseSRV.Get(), mHeightSRV.Get(), mNormalSRV.Get(), mShadowSRV.Get() };
+    mCtx->PSSetShaderResources(0, 4, srvs);
 
-    ID3D11SamplerState* samp = mSampler.Get();
-    mCtx->PSSetSamplers(0, 1, &samp);
+    // 샘플러 (s0: 일반, s1: comparison)
+    ID3D11SamplerState* samplers[2] = { mSampler.Get(), mShadowSampler.Get() };
+    mCtx->PSSetSamplers(0, 2, samplers);
 
+    // 메시 드로우
     if (mMeshMode == 0)
         mSphere.Draw(mCtx.Get());
     else
         mQuad.Draw(mCtx.Get());
 
+    // Shadow SRV unbind (다음 프레임 Shadow Pass에서 DSV로 사용하기 위해)
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    mCtx->PSSetShaderResources(3, 1, &nullSRV);
+
+    // ImGui
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -509,6 +530,12 @@ void D3DApp::Render()
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
     mSwapChain->Present(1, 0);
+}
+
+void D3DApp::Render()
+{
+    RenderShadowPass();
+    RenderMainPass();
 }
 
 LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
