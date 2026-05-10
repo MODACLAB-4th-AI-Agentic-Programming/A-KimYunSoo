@@ -61,7 +61,7 @@ float CalcShadowFactor(float3 posW)
 
 float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS)
 {
-    float numLayers  = lerp(64.0, 16.0, saturate(viewDirTS.z));
+    float numLayers  = lerp(128.0, 32.0, saturate(viewDirTS.z));
     float layerDepth = 1.0 / numLayers;
     float2 uvStep    = (viewDirTS.xy / viewDirTS.z) * gHeightScale * layerDepth;
 
@@ -74,7 +74,7 @@ float2 ParallaxOcclusionMapping(float2 uv, float3 viewDirTS)
 
     // 1단계: 교차 구간 탐색
     [loop]
-    for (int i = 0; i < 64; i++)
+    for (int i = 0; i < 128; i++)
     {
         if (currentDepth >= h) break;
         prevUV       = currentUV;
