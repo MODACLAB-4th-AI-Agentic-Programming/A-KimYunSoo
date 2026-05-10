@@ -21,7 +21,16 @@ Decide where each addition belongs:
 - `CLAUDE.md` - Team-shared (checked into git)
 - `.claude.local.md` - Personal/local only (gitignored)
 
-## Step 3: Draft Additions
+## Step 3: Check for Stale Content
+
+Read the current CLAUDE.md and identify entries that are:
+- No longer true (refactored away, renamed, deleted)
+- Duplicated elsewhere
+- Too specific to a one-time fix that won't recur
+
+Flag these for removal alongside new additions.
+
+## Step 4: Draft Changes
 
 **Keep it concise** - one line per concept. CLAUDE.md is part of the prompt, so brevity matters.
 
@@ -32,9 +41,9 @@ Avoid:
 - Obvious information
 - One-off fixes unlikely to recur
 
-## Step 4: Show Proposed Changes
+## Step 5: Show Proposed Changes
 
-For each addition, show it as a diff before applying:
+Show additions and removals together as a diff before applying:
 
 ```
 ### Update: ./CLAUDE.md
@@ -42,9 +51,10 @@ For each addition, show it as a diff before applying:
 **Why:** [one-line reason]
 
 diff
-+ [the addition - keep it brief]
++ [new entry]
+- [stale entry being removed]
 ```
 
-## Step 5: Apply with Approval
+## Step 6: Apply with Approval
 
 Ask if the user wants to apply the changes. Only edit files they approve.
