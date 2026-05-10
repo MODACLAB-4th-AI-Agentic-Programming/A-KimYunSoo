@@ -96,3 +96,22 @@ feat: 삼각형 렌더링 구현
 - 픽셀/버텍스 셰이더 컴파일
 - Draw Call 추가
 ```
+
+---
+
+# 프로젝트 정보
+
+## 빌드
+- `MSBuild DirectX/DirectX.sln /p:Configuration=Debug /p:Platform=x64 /t:Build /v:minimal`
+- MSBuild 경로: `C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe`
+
+## 구조
+- `DirectX/DirectX/` — C++ 소스 (D3DApp, Sphere, Quad, Camera)
+- `DirectX/DirectX/Shader/` — HLSL 셰이더 (POM_VS, POM_PS, Shadow_VS)
+- `DirectX/Texture/` — 텍스처 (diffuse, displacement, normal .png)
+- `devlog/` — 작업 일지 (YYYY-MM-DD.md)
+
+## 환경
+- Windows 11 / Visual Studio 2022 / DirectX 11
+- 셰이더는 런타임 컴파일 (D3DCompileFromFile) → .hlsl 수정 후 재빌드 불필요
+- 상수 버퍼(cbuffer)는 16바이트 정렬 필수, CPU 구조체와 HLSL 레이아웃 일치시킬 것
