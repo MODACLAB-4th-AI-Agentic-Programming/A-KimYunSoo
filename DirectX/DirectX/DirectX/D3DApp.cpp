@@ -1,4 +1,4 @@
-#include "D3DApp.h"
+﻿#include "D3DApp.h"
 #include <wincodec.h>
 #include "../ImGui/imgui.h"
 #include "../ImGui/imgui_impl_win32.h"
@@ -524,6 +524,17 @@ void D3DApp::RenderMainPass()
     } else {
         if (ImGui::Button("Stop Light"))   mLightPaused = true;
     }
+    ImGui::Separator();
+    ImGui::Text("Shadow");
+    ImGui::SliderFloat("Shadow Bias", &mShadowBias, 0.0001f, 0.01f, "%.4f");
+    ImGui::SliderFloat("Shadow Intensity", &mShadowIntensity, 0.0f, 1.0f);
+    ImGui::Text("PCF Kernel");
+    ImGui::SameLine();
+    if (ImGui::RadioButton("1x1", mPCFKernel == 1)) mPCFKernel = 1;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("3x3", mPCFKernel == 3)) mPCFKernel = 3;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("5x5", mPCFKernel == 5)) mPCFKernel = 5;
     ImGui::End();
 
     ImGui::Render();

@@ -130,6 +130,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="D3DApp.cpp" />
+    <ClCompile Include="Quad.cpp" />
     <ClCompile Include="Sphere.cpp" />
     <ClCompile Include="..\ImGui\imgui.cpp" />
     <ClCompile Include="..\ImGui\imgui_draw.cpp" />
@@ -141,6 +142,7 @@
   <ItemGroup>
     <ClInclude Include="D3DApp.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="Quad.h" />
     <ClInclude Include="Sphere.h" />
     <ClInclude Include="..\ImGui\imgui.h" />
     <ClInclude Include="..\ImGui\imgui_impl_win32.h" />
